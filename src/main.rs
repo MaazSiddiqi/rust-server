@@ -17,20 +17,23 @@ async fn main() {
             let mut reader = BufReader::new(reader);
             let mut line = String::new();
 
-
             loop {
-                let bytes_read = reader.read_line(&mut line).await.unwrap();
+                tokio::select! {
+                    // broadcast message to all clients
+                    res = reader.read_line(&mut line) => {
+                        if res.unwrap() == 0 {
+                            break;
+                        }
 
-                if bytes_read == 0 {
-                    break;
+                        tx.send(line.clone()).unwrap();
+                        line.clear();
+                    }
+                    // receive message from broadcast
+                    res = rx.recv() => {
+                        let msg = res.unwrap();
+                        writer.write_all(msg.as_bytes()).await.unwrap();
+                    }
                 }
-
-                tx.send(line.clone()).unwrap();
-
-                let msg = rx.recv().await.unwrap();
-
-                writer.write_all(msg.as_bytes()).await.unwrap();
-                line.clear();
             }
         });
 
